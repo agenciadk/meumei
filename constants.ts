@@ -1,5 +1,4 @@
 
-
 // Credentials as requested
 export const MOCK_CREDENTIALS = {
   username: 'agdk',
@@ -31,29 +30,60 @@ export const DEFAULT_COMPANY_INFO = {
   phone: '',
   email: '',
   website: '',
-  selicRate: 13.75, // Default fallback value
+  selicRate: 11.25, // Atualizado para 11.25% conforme solicitado
   isConfigured: false // Default to false until setup is completed
 };
 
-// --- ALTERAÇÃO: Array vazio para iniciar sem contas ---
-export const DEFAULT_ACCOUNTS: any[] = [];
+// --- CONTAS PADRÃO COM DADOS DE INVESTIMENTO (ATUALIZADO) ---
+export const DEFAULT_ACCOUNTS: any[] = [
+    { 
+        id: 'acc_mp_nati', 
+        name: 'MP - Nati', 
+        type: 'Rendimentos', 
+        initialBalance: 3868.19, // Ajustado para base antes do rendimento
+        currentBalance: 3868.19, 
+        yieldRate: 120, 
+        yieldIndex: 'CDI',
+        balanceHistory: [{ date: '2025-12-01', value: 3868.19 }]
+    },
+    { 
+        id: 'acc_mp_ale', 
+        name: 'MP - Ale', 
+        type: 'Rendimentos', 
+        initialBalance: 5912.57, 
+        currentBalance: 5912.57, 
+        yieldRate: 120, 
+        yieldIndex: 'CDI',
+        balanceHistory: [{ date: '2025-12-01', value: 5912.57 }]
+    },
+    { 
+        id: 'acc_mp_dk', 
+        name: 'MP - DK', 
+        type: 'Rendimentos', 
+        initialBalance: 1727.32, 
+        currentBalance: 1727.32, 
+        yieldRate: 115, 
+        yieldIndex: 'CDI',
+        balanceHistory: [{ date: '2025-12-01', value: 1727.32 }] 
+    },
+    { 
+        id: 'acc_nubank', 
+        name: 'Nubank', 
+        type: 'Conta Bancária', 
+        initialBalance: 2500, 
+        currentBalance: 2150.50 
+    }
+];
 
 // Dados antigos mantidos apenas para referência (não usados na inicialização)
-export const MOCK_ACCOUNTS_FOR_DEMO = [
-    { id: '1', name: 'Cora', type: 'Conta Bancária', initialBalance: 0, currentBalance: 0.32 },
-    { id: '2', name: 'Sicredi', type: 'Conta Bancária', initialBalance: 0, currentBalance: 95.90 },
-    { id: '3', name: 'Nubank', type: 'Conta Bancária', initialBalance: 0, currentBalance: 0.00 },
-    { id: '4', name: 'MP - DK', type: 'Rendimentos', initialBalance: 0, currentBalance: 1727.32 },
-    { id: '5', name: 'MP - Nati', type: 'Rendimentos', initialBalance: 0, currentBalance: 3868.19 },
-    { id: '6', name: 'MP - Ale', type: 'Rendimentos', initialBalance: 0, currentBalance: 5912.57 },
-    { id: '7', name: 'Dinheiro', type: 'Dinheiro (Espécie)', initialBalance: 0, currentBalance: 115.50 },
-];
+export const MOCK_ACCOUNTS_FOR_DEMO = [];
 
 export const DEFAULT_ACCOUNT_TYPES = [
     'Conta Bancária',
     'Carteira Digital',
     'Conta Digital Internacional',
     'Rendimentos',
+    'Investimento',
     'Dinheiro (Espécie)'
 ];
 

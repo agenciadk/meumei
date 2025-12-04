@@ -1,7 +1,6 @@
 
-
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Pencil, Trash2, CreditCard as CardIcon, Wallet } from 'lucide-react';
+import { ArrowLeft, Plus, CreditCard as CardIcon, Wallet, Trash2, X, AlertTriangle } from 'lucide-react';
 import { Expense, Account, CreditCard, ExpenseType } from '../types';
 import NewExpenseModal from './NewExpenseModal';
 
@@ -9,7 +8,7 @@ interface ExpensesViewProps {
   onBack: () => void;
   expenses: Expense[];
   onUpdateExpenses: (expenses: Expense[]) => void;
-  onDelete: (id: string) => void;
+  onDeleteExpense: (id: string) => void;
   accounts: Account[];
   onUpdateAccounts?: (accounts: Account[]) => void;
   creditCards: CreditCard[];
@@ -24,7 +23,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   onBack, 
   expenses, 
   onUpdateExpenses,
-  onDelete,
+  onDeleteExpense,
   accounts,
   onUpdateAccounts,
   creditCards,
@@ -34,7 +33,9 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   themeColor
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  
+  // --- DELETE STATE ---
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
 
   // Filter expenses by Type AND Date
   const filteredExpenses = expenses.filter(exp => {
@@ -58,9 +59,17 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   };
   const theme = getThemeClasses();
 
+  // Helper for singular title
+  const getSingularTitle = () => {
+      switch(expenseType) {
+          case 'fixed': return 'Despesa Fixa';
+          case 'personal': return 'Despesa Pessoal';
+          case 'variable': return 'Despesa Variável';
+          default: return 'Despesa';
+      }
+  }
+
   const handleSaveExpense = (expenseData: any) => {
-      // NOTE: Create/Edit logic remains client-side array manipulation here for now,
-      // but for DELETE we rely strictly on the passed onDelete prop to ensure global consistency.
       let updatedList;
       let newItems: Expense[] = [];
 
@@ -73,11 +82,6 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
               id: e.id || Math.random().toString(36).substr(2, 9)
           }));
           updatedList = [...expenses, ...newItems];
-      } else if (expenseData.id) {
-          // Edit existing
-          const updatedItem = { ...expenseData, type: expenseType };
-          newItems = [updatedItem];
-          updatedList = expenses.map(e => e.id === expenseData.id ? updatedItem : e);
       } else {
           // New single
           const newItem = { ...expenseData, type: expenseType, id: Math.random().toString(36).substr(2, 9) };
@@ -85,31 +89,23 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
           updatedList = [...expenses, newItem];
       }
       
-      // Update Balance for Create/Edit
+      // Update Balance for Create
       if (onUpdateAccounts) {
           const newAccounts = [...accounts];
           let accountsChanged = false;
 
-          const processTransaction = (exp: any, revert: boolean) => {
+          const processTransaction = (exp: any) => {
               if (exp.accountId && exp.status === 'paid') {
                   const accIdx = newAccounts.findIndex(a => a.id === exp.accountId);
                   if (accIdx > -1) {
-                      if (revert) {
-                          newAccounts[accIdx].currentBalance += exp.amount;
-                      } else {
-                          newAccounts[accIdx].currentBalance -= exp.amount;
-                      }
+                      newAccounts[accIdx].currentBalance -= exp.amount;
                       accountsChanged = true;
                   }
               }
           };
 
-          if (editingExpense) {
-              processTransaction(editingExpense, true);
-          }
-
           newItems.forEach(item => {
-              processTransaction(item, false);
+              processTransaction(item);
           });
 
           if (accountsChanged) {
@@ -119,25 +115,22 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
 
       onUpdateExpenses(updatedList);
       setIsModalOpen(false);
-      setEditingExpense(null);
   };
 
-  const handleDelete = (id: string, e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      console.log('ExpensesView: Lixeira clicada para ID:', id);
-      if(confirm('Deseja realmente excluir esta despesa?')) {
-          console.log('ExpensesView: Confirmado. Chamando onDelete prop...');
-          onDelete(id);
+  // Trigger delete modal
+  const requestDelete = (expense: Expense) => {
+      setExpenseToDelete(expense);
+  };
+
+  // Confirm deletion
+  const confirmDelete = () => {
+      if (expenseToDelete) {
+          onDeleteExpense(expenseToDelete.id);
+          setExpenseToDelete(null);
       }
   };
 
-  const handleEdit = (expense: Expense) => {
-      setEditingExpense(expense);
-      setIsModalOpen(true);
-  };
-
   const handleNew = () => {
-      setEditingExpense(null);
       setIsModalOpen(true);
   };
 
@@ -176,7 +169,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                     onClick={handleNew}
                     className={`${theme.btn} text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-all shadow-lg`}
                 >
-                    <Plus size={20} /> Nova Despesa
+                    <Plus size={20} /> Nova {getSingularTitle()}
                 </button>
             </div>
         </div>
@@ -203,7 +196,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                                 filteredExpenses.map(expense => {
                                     const source = getSourceInfo(expense);
                                     return (
-                                    <tr key={expense.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1a1a] transition-colors">
+                                    <tr key={expense.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1a1a] transition-colors group">
                                         <td className="px-6 py-4">
                                             <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
                                                 expense.status === 'paid' 
@@ -234,22 +227,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                                         <td className="px-6 py-4 text-right font-bold text-red-600 dark:text-red-400">
                                             R$ {expense.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button 
-                                                    onClick={() => handleEdit(expense)}
-                                                    className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-                                                >
-                                                    <Pencil size={16} />
-                                                </button>
-                                                <button 
-                                                    onClick={(e) => handleDelete(expense.id, e)}
-                                                    className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                                    title="Excluir"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
+                                        <td className="px-6 py-4 text-center">
+                                            <button 
+                                                onClick={() => requestDelete(expense)}
+                                                className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                title="Excluir Despesa"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
                                         </td>
                                     </tr>
                                 )})
@@ -270,11 +255,61 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
             onSave={handleSaveExpense}
-            initialData={editingExpense}
+            initialData={null}
             accounts={accounts}
             creditCards={creditCards}
             categories={[]}
+            expenseType={expenseType}
+            themeColor={themeColor}
         />
+
+        {/* --- DELETE CONFIRMATION MODAL --- */}
+        {expenseToDelete && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-w-sm w-full p-6 relative animate-in zoom-in-95 duration-200">
+                    <button 
+                        onClick={() => setExpenseToDelete(null)}
+                        className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-white"
+                    >
+                        <X size={20} />
+                    </button>
+
+                    <div className="flex flex-col items-center text-center mb-6">
+                        <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-4 text-red-600 dark:text-red-500">
+                            <Trash2 size={24} />
+                        </div>
+                        <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">Excluir Despesa?</h3>
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                            Você está prestes a excluir <strong>{expenseToDelete.description}</strong> no valor de <strong>R$ {expenseToDelete.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>.
+                        </p>
+                    </div>
+
+                    {expenseToDelete.status === 'paid' && expenseToDelete.accountId && (
+                        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 p-3 rounded-lg flex gap-3 items-start mb-6 text-left">
+                            <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                                Como esta despesa já foi paga, o valor será <strong>estornado (devolvido)</strong> ao saldo da conta de origem.
+                            </p>
+                        </div>
+                    )}
+
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setExpenseToDelete(null)}
+                            className="flex-1 py-3 rounded-xl font-bold text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={confirmDelete}
+                            className="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-900/20 transition-colors text-sm"
+                        >
+                            Sim, Excluir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

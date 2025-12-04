@@ -1,4 +1,5 @@
 
+import React from 'react';
 
 export type Role = 'admin' | 'user';
 
@@ -31,7 +32,8 @@ export enum ViewState {
   VARIABLE_EXPENSES = 'VARIABLE_EXPENSES',
   FIXED_EXPENSES = 'FIXED_EXPENSES',
   PERSONAL_EXPENSES = 'PERSONAL_EXPENSES',
-  INCOMES = 'INCOMES'
+  INCOMES = 'INCOMES',
+  YIELDS = 'YIELDS' // Novo estado
 }
 
 export interface Transaction {
@@ -50,6 +52,24 @@ export interface Account {
   initialBalance: number;
   currentBalance: number;
   icon?: React.ReactNode; 
+  // Novos campos de Rendimento
+  yieldRate?: number; // Ex: 100 (para 100%)
+  yieldIndex?: 'CDI' | 'Selic'; 
+  // Histórico para gráficos
+  balanceHistory?: { date: string; value: number }[];
+  
+  // Controle de Rendimentos (Manual/Auto)
+  lastYield?: number; // Valor do último rendimento
+  lastYieldDate?: string; // Data do último rendimento
+  lastYieldNote?: string; // Observação do último rendimento
+  
+  // Deprecated but kept for compatibility with existing types if needed temporarily
+  lastYieldDetails?: {
+    base: number;
+    gross: number;
+    ir: number;
+    net: number;
+  };
 }
 
 export interface CreditCard {

@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { 
   TrendingUp, 
@@ -36,6 +35,7 @@ interface DashboardProps {
   onOpenFixedExpenses?: () => void;
   onOpenPersonalExpenses?: () => void;
   onOpenIncomes?: () => void;
+  onOpenYields?: () => void; // Added prop
   financialData: FinancialData;
   creditCards: CreditCardType[];
   expenseBreakdown?: ExpenseBreakdown;
@@ -47,6 +47,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     onOpenFixedExpenses,
     onOpenPersonalExpenses,
     onOpenIncomes,
+    onOpenYields,
     financialData,
     creditCards,
     expenseBreakdown = { fixed: 0, variable: 0, personal: 0 }
@@ -115,7 +116,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                     border="border-cyan-100 dark:border-cyan-500/20" 
                     onClick={onOpenPersonalExpenses}
                 />
-                <QuickAction icon={<TrendingUp />} label="Rendimentos" color="text-violet-500 dark:text-violet-400" bg="bg-violet-50 dark:bg-violet-500/10" border="border-violet-100 dark:border-violet-500/20" />
+                <QuickAction 
+                    icon={<TrendingUp />} 
+                    label="Rendimentos" 
+                    color="text-violet-500 dark:text-violet-400" 
+                    bg="bg-violet-50 dark:bg-violet-500/10" 
+                    border="border-violet-100 dark:border-violet-500/20"
+                    onClick={onOpenYields} 
+                />
                 <QuickAction icon={<CreditCard />} label="Faturas" color="text-rose-500 dark:text-rose-400" bg="bg-rose-50 dark:bg-rose-500/10" border="border-rose-100 dark:border-rose-500/20" />
                 <QuickAction icon={<BarChart3 />} label="Relatórios" color="text-zinc-500 dark:text-zinc-400" bg="bg-zinc-100 dark:bg-zinc-500/10" border="border-zinc-200 dark:border-zinc-500/20" />
             </div>

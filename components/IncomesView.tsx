@@ -1,7 +1,7 @@
 
 
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Pencil, Trash2, Wallet, ArrowUpCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Wallet, ArrowUpCircle, Trash2, AlertTriangle, X } from 'lucide-react';
 import { Income, Account } from '../types';
 import NewIncomeModal from './NewIncomeModal';
 
@@ -9,7 +9,7 @@ interface IncomesViewProps {
   onBack: () => void;
   incomes: Income[];
   onUpdateIncomes: (incomes: Income[]) => void;
-  onDelete: (id: string | number) => void;
+  onDeleteIncome: (id: string) => void;
   accounts: Account[];
   onUpdateAccounts: (accounts: Account[]) => void;
   viewDate: Date;
@@ -21,7 +21,7 @@ const IncomesView: React.FC<IncomesViewProps> = ({
   onBack, 
   incomes, 
   onUpdateIncomes,
-  onDelete,
+  onDeleteIncome,
   accounts,
   onUpdateAccounts,
   viewDate,
@@ -29,7 +29,9 @@ const IncomesView: React.FC<IncomesViewProps> = ({
   onUpdateCategories
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingIncome, setEditingIncome] = useState<Income | null>(null);
+  
+  // --- DELETE STATE ---
+  const [incomeToDelete, setIncomeToDelete] = useState<Income | null>(null);
 
   // Filter incomes by Date
   const filteredIncomes = incomes.filter(inc => {
@@ -66,40 +68,27 @@ const IncomesView: React.FC<IncomesViewProps> = ({
           }
 
       } else {
-          // Single Entry (Edit or New)
+          // Single Entry (New)
           let newItem: Income;
-          const isEdit = !!incomeData.id;
-
-          if (isEdit) {
-              newItem = incomeData;
-              updatedList = incomes.map(i => i.id === incomeData.id ? incomeData : i);
-          } else {
-              newItem = { ...incomeData, id: String(Math.random().toString(36).substr(2, 9)) };
-              updatedList = [...incomes, newItem];
-          }
+          // No Edit Support anymore as requested
+          newItem = { ...incomeData, id: String(Math.random().toString(36).substr(2, 9)) };
+          updatedList = [...incomes, newItem];
           
-          // --- BALANCE UPDATE LOGIC FOR CREATE/EDIT ---
+          // --- BALANCE UPDATE LOGIC FOR CREATE ---
           const newAccounts = [...accounts];
           let accountsChanged = false;
 
-          const processTransaction = (inc: any, revert: boolean) => {
+          const processTransaction = (inc: any) => {
               if (inc.accountId && inc.status === 'received') {
                   const accIdx = newAccounts.findIndex(a => a.id === inc.accountId);
                   if (accIdx > -1) {
-                      if (revert) {
-                          newAccounts[accIdx].currentBalance -= inc.amount;
-                      } else {
-                          newAccounts[accIdx].currentBalance += inc.amount;
-                      }
+                      newAccounts[accIdx].currentBalance += inc.amount;
                       accountsChanged = true;
                   }
               }
           };
 
-          if (isEdit && editingIncome) {
-              processTransaction(editingIncome, true);
-          }
-          processTransaction(newItem, false);
+          processTransaction(newItem);
 
           if (accountsChanged) {
               onUpdateAccounts(newAccounts);
@@ -108,16 +97,22 @@ const IncomesView: React.FC<IncomesViewProps> = ({
 
       onUpdateIncomes(updatedList);
       setIsModalOpen(false);
-      setEditingIncome(null);
   };
 
-  const handleEdit = (income: Income) => {
-      setEditingIncome(income);
-      setIsModalOpen(true);
+  // Trigger modal opening
+  const requestDelete = (income: Income) => {
+      setIncomeToDelete(income);
+  };
+
+  // Confirm Action
+  const confirmDelete = () => {
+      if (incomeToDelete) {
+          onDeleteIncome(incomeToDelete.id);
+          setIncomeToDelete(null);
+      }
   };
 
   const handleNew = () => {
-      setEditingIncome(null);
       setIsModalOpen(true);
   };
 
@@ -176,7 +171,7 @@ const IncomesView: React.FC<IncomesViewProps> = ({
                         <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                             {filteredIncomes.length > 0 ? (
                                 filteredIncomes.map(income => (
-                                    <tr key={income.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1a1a] transition-colors">
+                                    <tr key={income.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1a1a] transition-colors group">
                                         <td className="px-6 py-4">
                                             <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
                                                 income.status === 'received' 
@@ -209,28 +204,14 @@ const IncomesView: React.FC<IncomesViewProps> = ({
                                         <td className="px-6 py-4 text-right font-bold text-emerald-600 dark:text-emerald-400">
                                             + R$ {income.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button 
-                                                    onClick={() => handleEdit(income)}
-                                                    className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-                                                >
-                                                    <Pencil size={16} />
-                                                </button>
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        console.log('Clique na lixeira, id:', income.id);
-                                                        if (confirm('Deseja excluir esta entrada?')) {
-                                                            onDelete(income.id);
-                                                        }
-                                                    }}
-                                                    className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                                    title="Excluir"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
+                                        <td className="px-6 py-4 text-center">
+                                            <button 
+                                                onClick={() => requestDelete(income)}
+                                                className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                title="Excluir Entrada"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
                                         </td>
                                     </tr>
                                 ))
@@ -251,11 +232,59 @@ const IncomesView: React.FC<IncomesViewProps> = ({
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
             onSave={handleSaveIncome}
-            initialData={editingIncome}
+            initialData={null}
             accounts={accounts}
             categories={categories}
             onUpdateCategories={onUpdateCategories}
         />
+
+        {/* --- DELETE CONFIRMATION MODAL --- */}
+        {incomeToDelete && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-w-sm w-full p-6 relative animate-in zoom-in-95 duration-200">
+                    <button 
+                        onClick={() => setIncomeToDelete(null)}
+                        className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-white"
+                    >
+                        <X size={20} />
+                    </button>
+
+                    <div className="flex flex-col items-center text-center mb-6">
+                        <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-4 text-red-600 dark:text-red-500">
+                            <Trash2 size={24} />
+                        </div>
+                        <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">Excluir Entrada?</h3>
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                            Você está prestes a excluir o registro de <strong>{incomeToDelete.description}</strong> no valor de <strong>R$ {incomeToDelete.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>.
+                        </p>
+                    </div>
+
+                    {incomeToDelete.status === 'received' && (
+                        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 p-3 rounded-lg flex gap-3 items-start mb-6 text-left">
+                            <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                                Como esta entrada já foi marcada como <strong>Recebida</strong>, o valor será debitado do saldo da conta vinculada.
+                            </p>
+                        </div>
+                    )}
+
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setIncomeToDelete(null)}
+                            className="flex-1 py-3 rounded-xl font-bold text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={confirmDelete}
+                            className="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-900/20 transition-colors text-sm"
+                        >
+                            Sim, Excluir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { X, ChevronDown, Plus, Trash2, TrendingUp } from 'lucide-react';
 import { Account } from '../types';
 
 interface NewAccountModalProps {
@@ -26,6 +26,9 @@ const NewAccountModal: React.FC<NewAccountModalProps> = ({
   // Account Types now come from props
   const [selectedType, setSelectedType] = useState('');
   
+  // Yield Fields
+  const [yieldRate, setYieldRate] = useState('');
+  
   // UI States
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isManagingTypes, setIsManagingTypes] = useState(false);
@@ -40,15 +43,18 @@ const NewAccountModal: React.FC<NewAccountModalProps> = ({
             setAccountName(initialData.name);
             setInitialBalance(initialData.initialBalance.toString());
             setSelectedType(initialData.type);
+            setYieldRate(initialData.yieldRate ? initialData.yieldRate.toString() : '');
         } else {
             setAccountName('');
             setInitialBalance('');
             setSelectedType('');
+            setYieldRate('');
         }
     } else {
         setIsManagingTypes(false);
         setIsDropdownOpen(false);
         setNewTypeInputValue('');
+        setYieldRate('');
     }
   }, [isOpen, initialData]);
 
@@ -64,6 +70,12 @@ const NewAccountModal: React.FC<NewAccountModalProps> = ({
   }, []);
 
   if (!isOpen) return null;
+
+  // Helper to detect investment types
+  const isInvestmentType = (type: string) => {
+      const lower = type.toLowerCase();
+      return lower.includes('rendimento') || lower.includes('investimento') || lower.includes('aplicação');
+  };
 
   const handleDeleteType = (typeToDelete: string) => {
     if (accountTypes.length <= 1) {
@@ -91,18 +103,21 @@ const NewAccountModal: React.FC<NewAccountModalProps> = ({
   const handleSave = () => {
     if (!accountName || !selectedType) return;
     
+    const isInvest = isInvestmentType(selectedType);
+
     onSave({
       id: initialData?.id, // Pass ID if editing
       name: accountName,
       balance: parseFloat(initialBalance.replace(',', '.')) || 0,
-      type: selectedType
+      type: selectedType,
+      // Save Yield Rate if investment type
+      yieldRate: isInvest && yieldRate ? parseFloat(yieldRate) : undefined,
+      yieldIndex: isInvest && yieldRate ? 'CDI' : undefined // Defaulting to CDI for simplicity as per requirements
     });
     onClose();
   };
 
   return (
-    // Outer container handles scrolling if modal is too tall
-    // IMPORTANT: overflow-y-auto is here, not on the body of the app, to allow scrolling of tall modals
     <div className="fixed inset-0 z-[60] overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
         
@@ -125,7 +140,7 @@ const NewAccountModal: React.FC<NewAccountModalProps> = ({
             </button>
           </div>
 
-          {/* Body - Overflow Visible so dropdowns can spill out */}
+          {/* Body */}
           <div className="p-6 space-y-6 relative z-30">
             
             {/* Account Name */}
@@ -155,7 +170,6 @@ const NewAccountModal: React.FC<NewAccountModalProps> = ({
 
               {/* Account Type Section */}
               <div className="space-y-2 relative">
-                  {/* Label Row with Toggle Button */}
                   <div className="flex justify-between items-center h-4">
                       <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">Tipo de Conta</label>
                       <button
@@ -174,7 +188,6 @@ const NewAccountModal: React.FC<NewAccountModalProps> = ({
                   {isManagingTypes ? (
                       // Management UI
                       <div className="absolute top-6 left-0 right-0 z-[60] bg-blue-50/95 dark:bg-[#1a1a1a] border border-blue-200 dark:border-blue-900/50 rounded-xl p-3 shadow-lg backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
-                           {/* Input Row */}
                           <div className="flex gap-2 mb-3">
                               <input
                                   autoFocus
@@ -193,7 +206,6 @@ const NewAccountModal: React.FC<NewAccountModalProps> = ({
                               </button>
                           </div>
                           
-                          {/* Scrollable List */}
                           <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-2 pr-1">
                                {accountTypes.map(type => (
                                   <div key={type} className="flex items-center justify-between bg-white dark:bg-[#202020] border border-zinc-200 dark:border-zinc-700/50 p-2.5 rounded-lg group hover:border-blue-200 dark:hover:border-blue-900/50 transition-colors">
@@ -244,6 +256,30 @@ const NewAccountModal: React.FC<NewAccountModalProps> = ({
                   )}
               </div>
             </div>
+
+            {/* CONDITIONAL YIELD FIELD */}
+            {isInvestmentType(selectedType) && (
+                <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 p-4 rounded-xl animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-2 mb-3 text-emerald-700 dark:text-emerald-400">
+                        <TrendingUp size={18} />
+                        <h3 className="text-sm font-bold uppercase">Configuração de Rendimento</h3>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">Taxa de Rendimento (% do CDI)</label>
+                        <input 
+                            type="number" 
+                            placeholder="Ex: 100"
+                            value={yieldRate}
+                            onChange={(e) => setYieldRate(e.target.value)}
+                            className="w-full bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-zinc-400"
+                        />
+                        <p className="text-[10px] text-zinc-400">
+                            Informe a porcentagem do CDI que esta conta rende (ex: 100% do CDI).
+                        </p>
+                    </div>
+                </div>
+            )}
+
           </div>
 
           {/* Footer */}

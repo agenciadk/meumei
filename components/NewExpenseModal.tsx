@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Edit2, Plus } from 'lucide-react';
-import { Expense, Account, CreditCard } from '../types';
+import { X, Calendar, Edit2, Plus, CreditCard, Home, ShoppingCart, User } from 'lucide-react';
+import { Expense, Account, CreditCard as CreditCardType, ExpenseType } from '../types';
 
 interface NewExpenseModalProps {
   isOpen: boolean;
@@ -9,12 +9,14 @@ interface NewExpenseModalProps {
   onSave: (expense: any) => void;
   initialData?: Expense | null;
   accounts: Account[];
-  creditCards: CreditCard[];
+  creditCards: CreditCardType[];
   categories: string[]; 
+  expenseType: ExpenseType; // Prop para identificar o tipo e ajustar o layout
+  themeColor?: 'indigo' | 'amber' | 'cyan' | 'pink'; // Prop para cor do tema
 }
 
 const DEFAULT_CATEGORIES = [
-    'Alimentação', 'Assinatura', 'Cenário', 'Equipamentos', 'Logística', 'Materiais', 'Plantas', 'Revelação', 'Tráfego Pago'
+    'Alimentação', 'Assinatura', 'Cenário', 'Equipamentos', 'Logística', 'Materiais', 'Plantas', 'Revelação', 'Tráfego Pago', 'Moradia', 'Transporte', 'Saúde', 'Lazer'
 ];
 
 const NewExpenseModal: React.FC<NewExpenseModalProps> = ({ 
@@ -23,7 +25,9 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
   onSave, 
   initialData, 
   accounts,
-  creditCards
+  creditCards,
+  expenseType,
+  themeColor = 'indigo'
 }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -45,6 +49,36 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
   const [firstInstallmentDate, setFirstInstallmentDate] = useState('');
   const [lastInstallmentDate, setLastInstallmentDate] = useState('');
 
+  // Helper for dynamic UI based on type
+  const getModalConfig = () => {
+      switch(expenseType) {
+          case 'fixed': 
+              return { 
+                  title: 'Nova Despesa Fixa', 
+                  icon: <Home className="text-amber-600 dark:text-amber-400" />,
+                  colorClass: 'text-amber-600 focus:ring-amber-500',
+                  btnClass: 'bg-amber-600 hover:bg-amber-700 shadow-amber-900/20'
+              };
+          case 'personal': 
+              return { 
+                  title: 'Nova Despesa Pessoal', 
+                  icon: <User className="text-cyan-600 dark:text-cyan-400" />,
+                  colorClass: 'text-cyan-600 focus:ring-cyan-500',
+                  btnClass: 'bg-cyan-600 hover:bg-cyan-700 shadow-cyan-900/20'
+              };
+          case 'variable':
+          default: 
+              return { 
+                  title: 'Nova Despesa Variável', 
+                  icon: <ShoppingCart className="text-pink-600 dark:text-pink-400" />,
+                  colorClass: 'text-pink-600 focus:ring-pink-500',
+                  btnClass: 'bg-pink-600 hover:bg-pink-700 shadow-pink-900/20'
+              };
+      }
+  };
+  
+  const config = getModalConfig();
+
   useEffect(() => {
     if (isOpen) {
         if (initialData) {
@@ -58,13 +92,12 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
             setSelectedCardId(initialData.cardId || '');
             setStatus(initialData.status);
             setNotes(initialData.notes || '');
-            setIsInstallment(false); // Edit mode doesn't support complex installment edit yet for simplicity
+            setIsInstallment(false);
         } else {
             // Reset form
             setDescription('');
             setAmount('');
             setCategory(DEFAULT_CATEGORIES[0]);
-            // Default date to today
             const today = new Date().toISOString().split('T')[0];
             setDate(today);
             setDueDate(today);
@@ -85,26 +118,22 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
       if (paymentMethod === 'Crédito' && selectedCardId && date) {
           const card = creditCards.find(c => c.id === selectedCardId);
           if (card) {
-              const launchDate = new Date(date + 'T12:00:00'); // Force noon to avoid timezone shift
+              const launchDate = new Date(date + 'T12:00:00'); 
               const closingDay = card.closingDay;
               const dueDay = card.dueDay;
               
               const launchDay = launchDate.getDate();
               let targetMonth = new Date(launchDate);
 
-              // Logic:
-              // If Purchase Day < Closing Day: Falls in CURRENT month's invoice.
-              // If Purchase Day >= Closing Day: Falls in NEXT month's invoice.
               if (launchDay >= closingDay) {
                   targetMonth.setMonth(targetMonth.getMonth() + 1);
               }
 
-              // The Due Date is usually the month AFTER the invoice month.
               targetMonth.setMonth(targetMonth.getMonth() + 1);
               targetMonth.setDate(dueDay);
               
               setDueDate(targetMonth.toISOString().split('T')[0]);
-              setStatus('pending'); // Credit card is always pending until paid
+              setStatus('pending'); 
           }
       }
   }, [paymentMethod, selectedCardId, date, creditCards]);
@@ -165,14 +194,13 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
           const expensesToSave = [];
           
           for (let i = 0; i < installmentCount; i++) {
-              // Calculate specific due date for this installment
               const baseDue = new Date(dueDate + 'T12:00:00');
               baseDue.setMonth(baseDue.getMonth() + i);
               const specificDueDate = baseDue.toISOString().split('T')[0];
 
               expensesToSave.push({
                   ...baseExpense,
-                  id: Math.random().toString(36).substr(2, 9), // IMPORTANT: Generate ID here
+                  id: Math.random().toString(36).substr(2, 9), 
                   amount: installmentValue,
                   dueDate: specificDueDate,
                   installments: true,
@@ -182,9 +210,8 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                   description: `${description} (${i+1}/${installmentCount})`
               });
           }
-          onSave(expensesToSave); // Handler needs to accept array
+          onSave(expensesToSave); 
       } else {
-          // Single Expense
           onSave({
               ...baseExpense,
               amount: parseFloat(amount.replace(',', '.')),
@@ -203,7 +230,10 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
         <div className="relative w-full max-w-2xl transform rounded-2xl bg-white dark:bg-[#1a1a1a] text-left shadow-xl transition-all sm:my-8 border border-zinc-200 dark:border-zinc-800">
           
           <div className="flex items-center justify-between p-6 border-b border-zinc-100 dark:border-zinc-800">
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Nova Despesa Variável</h2>
+            <h2 className={`text-xl font-bold flex items-center gap-2 ${config.colorClass.split(' ')[0]} dark:text-white`}>
+              {config.icon}
+              {initialData ? 'Editar Despesa' : config.title}
+            </h2>
             <button onClick={onClose} className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
               <X size={20} />
             </button>
@@ -217,7 +247,8 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                 type="text" 
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                placeholder="Ex: Aluguel, Supermercado, Netflix..."
+                className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all`}
               />
             </div>
 
@@ -228,20 +259,18 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                         type="number" 
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        className="w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        placeholder="0,00"
+                        className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all`}
                     />
                 </div>
                 <div className="space-y-2">
                     <div className="flex justify-between">
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">Categoria</label>
-                        <button className="text-[10px] text-blue-500 font-bold flex items-center gap-1 hover:text-blue-400">
-                            <Edit2 size={10} /> Editar <Plus size={10} /> Nova
-                        </button>
                     </div>
                     <select 
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        className="w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none"
+                        className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all appearance-none`}
                     >
                         {DEFAULT_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                     </select>
@@ -255,7 +284,7 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                         type="date" 
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
-                        className="w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all [color-scheme:dark]"
+                        className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all [color-scheme:dark]`}
                     />
                     <Calendar className="absolute right-4 top-3 text-zinc-400 pointer-events-none" size={20} />
                 </div>
@@ -264,11 +293,10 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">Conta de Pagamento</label>
-                    {/* Simplified Logic: Select changes options based on type, but internal state handles mapping */}
                     <select 
                         value={isCredit ? selectedCardId : selectedAccountId}
                         onChange={(e) => isCredit ? setSelectedCardId(e.target.value) : setSelectedAccountId(e.target.value)}
-                        className="w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none"
+                        className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all appearance-none`}
                     >
                         {isCredit ? (
                             creditCards.length > 0 ? (
@@ -287,7 +315,7 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                     <select 
                         value={paymentMethod}
                         onChange={(e) => setPaymentMethod(e.target.value)}
-                        className="w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none"
+                        className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all appearance-none`}
                     >
                         <option>Débito</option>
                         <option>Crédito</option>
@@ -305,8 +333,8 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                     <select 
                         value={status}
                         onChange={(e) => setStatus(e.target.value as 'pending' | 'paid')}
-                        disabled={isCredit} // Credit is always pending initially
-                        className="w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none disabled:opacity-50"
+                        disabled={isCredit} 
+                        className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all appearance-none disabled:opacity-50`}
                     >
                         <option value="pending">Pendente</option>
                         <option value="paid">Pago</option>
@@ -320,8 +348,8 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                             type="date" 
                             value={dueDate}
                             onChange={(e) => setDueDate(e.target.value)}
-                            disabled={isCredit} // Auto-calculated for credit
-                            className="w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all [color-scheme:dark] disabled:opacity-50"
+                            disabled={isCredit} 
+                            className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all [color-scheme:dark] disabled:opacity-50`}
                         />
                         <Calendar className="absolute right-4 top-3 text-zinc-400 pointer-events-none" size={20} />
                     </div>
@@ -411,7 +439,7 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                 placeholder="Informações adicionais..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-zinc-400 resize-none"
+                className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all placeholder:text-zinc-400 resize-none`}
               />
             </div>
 
@@ -421,7 +449,7 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
               <button onClick={onClose} className="px-6 py-3 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                   Cancelar
               </button>
-              <button onClick={handleSave} className="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-95">
+              <button onClick={handleSave} className={`px-6 py-3 rounded-lg text-white font-bold transition-all active:scale-95 ${config.btnClass}`}>
                   Adicionar Despesa
               </button>
           </div>

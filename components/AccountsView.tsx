@@ -8,11 +8,10 @@ import {
   Globe, 
   TrendingUp, 
   Banknote,
-  Pencil,
-  Trash2,
   CheckSquare,
-  Square,
-  X
+  Trash2,
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import NewAccountModal from './NewAccountModal';
 import { Account } from '../types';
@@ -21,6 +20,7 @@ interface AccountsViewProps {
   onBack: () => void;
   accounts: Account[];
   onUpdateAccounts: (accounts: Account[]) => void;
+  onDeleteAccount: (id: string) => void;
   accountTypes: string[];
   onUpdateAccountTypes: (types: string[]) => void;
 }
@@ -29,13 +29,16 @@ const AccountsView: React.FC<AccountsViewProps> = ({
   onBack, 
   accounts, 
   onUpdateAccounts, 
+  onDeleteAccount,
   accountTypes, 
   onUpdateAccountTypes 
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
+  // --- DELETE STATE ---
+  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
+
   // --- Logic for Dynamic Calculation ---
   const isSelectionMode = selectedIds.length > 0;
 
@@ -49,7 +52,7 @@ const AccountsView: React.FC<AccountsViewProps> = ({
   // --- Icons Logic ---
   const getIconForType = (type: string) => {
     if (type.includes('Carteira') || type.includes('Nubank')) return <Smartphone size={24} className="text-purple-600" />;
-    if (type.includes('Rendimentos')) return <TrendingUp size={24} className="text-purple-600" />;
+    if (type.includes('Rendimentos') || type.includes('Investimento')) return <TrendingUp size={24} className="text-purple-600" />;
     if (type.includes('Dinheiro')) return <Banknote size={24} className="text-purple-600" />;
     if (type.includes('Internacional')) return <Globe size={24} className="text-purple-600" />;
     return <Landmark size={24} className="text-purple-600" />;
@@ -60,6 +63,8 @@ const AccountsView: React.FC<AccountsViewProps> = ({
   const handleSaveAccount = (accountData: any) => {
     let updatedAccounts;
     if (accountData.id) {
+        // We removed editing for now, so this branch might be unused unless invoked differently, 
+        // but keeping logic clean for new additions.
         updatedAccounts = accounts.map(acc => 
             acc.id === accountData.id 
             ? { ...acc, name: accountData.name, type: accountData.type, initialBalance: accountData.balance, currentBalance: accountData.balance } 
@@ -71,37 +76,32 @@ const AccountsView: React.FC<AccountsViewProps> = ({
             name: accountData.name,
             type: accountData.type,
             initialBalance: accountData.balance,
-            currentBalance: accountData.balance
+            currentBalance: accountData.balance,
+            yieldRate: accountData.yieldRate,
+            yieldIndex: accountData.yieldIndex
             // icon is rendered dynamically
         };
         updatedAccounts = [...accounts, newAccount];
     }
     onUpdateAccounts(updatedAccounts);
     setIsModalOpen(false);
-    setEditingAccount(null);
   };
 
-  const handleDelete = (id: string, e?: React.MouseEvent) => {
-      e?.stopPropagation(); 
-      const updatedAccounts = accounts.filter(acc => acc.id !== id);
-      onUpdateAccounts(updatedAccounts);
-      setSelectedIds(selectedIds.filter(selectedId => selectedId !== id));
+  // Trigger modal
+  const requestDelete = (e: React.MouseEvent, account: Account) => {
+      e.stopPropagation(); // Prevent selection toggle
+      setAccountToDelete(account);
   };
 
-  const handleBulkDelete = () => {
-      const updatedAccounts = accounts.filter(acc => !selectedIds.includes(acc.id));
-      onUpdateAccounts(updatedAccounts);
-      setSelectedIds([]);
-  };
-
-  const handleEdit = (account: Account, e: React.MouseEvent) => {
-      e.stopPropagation();
-      setEditingAccount(account);
-      setIsModalOpen(true);
+  // Confirm delete
+  const confirmDelete = () => {
+      if (accountToDelete) {
+          onDeleteAccount(accountToDelete.id);
+          setAccountToDelete(null);
+      }
   };
 
   const handleOpenNew = () => {
-      setEditingAccount(null);
       setIsModalOpen(true);
   };
 
@@ -111,10 +111,6 @@ const AccountsView: React.FC<AccountsViewProps> = ({
       } else {
           setSelectedIds([...selectedIds, id]);
       }
-  };
-
-  const deselectAll = () => {
-      setSelectedIds([]);
   };
 
   return (
@@ -134,11 +130,6 @@ const AccountsView: React.FC<AccountsViewProps> = ({
               
               {/* Dynamic Balance Display */}
               <div className={`rounded-full px-6 py-3 shadow-lg border flex items-center gap-3 transition-all duration-300 ${isSelectionMode ? 'bg-indigo-600 border-indigo-500 text-white scale-105' : 'bg-white dark:bg-[#1a1a1a] border-zinc-200 dark:border-zinc-800'}`}>
-                  {isSelectionMode && (
-                      <button onClick={deselectAll} className="bg-white/20 hover:bg-white/30 rounded-full p-1 transition-colors">
-                          <X size={14} />
-                      </button>
-                  )}
                   <span className={`text-sm font-semibold ${isSelectionMode ? 'text-indigo-100' : 'text-zinc-600 dark:text-zinc-400'}`}>
                       {displayCount} {displayCount === 1 ? 'conta' : 'contas'} • {displayLabel}:
                   </span>
@@ -147,24 +138,14 @@ const AccountsView: React.FC<AccountsViewProps> = ({
                   </span>
               </div>
 
-              {/* Action Button: Toggle between New Account and Delete Selected */}
-              {isSelectionMode ? (
-                  <button 
-                    onClick={handleBulkDelete}
-                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg shadow-red-900/20 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 animate-in zoom-in duration-200"
-                  >
-                      <Trash2 size={20} />
-                      Excluir {selectedIds.length} {selectedIds.length === 1 ? 'Conta' : 'Contas'}
-                  </button>
-              ) : (
-                  <button 
-                    onClick={handleOpenNew}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg shadow-blue-900/20 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
-                  >
-                      <Plus size={20} />
-                      Nova Conta
-                  </button>
-              )}
+              {/* Action Button: Only New Account now */}
+              <button 
+                onClick={handleOpenNew}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg shadow-blue-900/20 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
+              >
+                  <Plus size={20} />
+                  Nova Conta
+              </button>
           </div>
       </div>
 
@@ -186,7 +167,7 @@ const AccountsView: React.FC<AccountsViewProps> = ({
                         `}
                     >
                       
-                      {/* Top Row: Checkbox, Icon, Name, Actions */}
+                      {/* Top Row: Checkbox, Icon, Name */}
                       <div className="flex items-start justify-between mb-6">
                           <div className="flex items-center gap-4">
                               {/* Selection Checkbox */}
@@ -207,24 +188,15 @@ const AccountsView: React.FC<AccountsViewProps> = ({
                                   <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{account.type}</p>
                               </div>
                           </div>
-                          
-                          {/* Individual Actions */}
-                          <div className="flex gap-2">
-                              <button 
-                                onClick={(e) => handleEdit(account, e)}
-                                className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors z-10"
-                                title="Editar"
-                              >
-                                  <Pencil size={16} />
-                              </button>
-                              <button 
-                                onClick={(e) => handleDelete(account.id, e)}
-                                className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors z-10"
-                                title="Excluir"
-                              >
-                                  <Trash2 size={16} />
-                              </button>
-                          </div>
+
+                           {/* Delete Button (Visible on Hover/Always on mobile) */}
+                           <button 
+                                onClick={(e) => requestDelete(e, account)}
+                                className="p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                title="Excluir Conta"
+                            >
+                                <Trash2 size={16} />
+                            </button>
                       </div>
 
                       {/* Info Rows */}
@@ -234,10 +206,12 @@ const AccountsView: React.FC<AccountsViewProps> = ({
                               <span className="font-medium text-zinc-900 dark:text-white">R$ {account.initialBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                           </div>
                           
-                          {account.type === 'Rendimentos' && (
+                          {(account.yieldRate !== undefined) && (
                                <div className="flex justify-between items-center text-sm">
                                   <span className="text-zinc-500 dark:text-zinc-400">Taxa:</span>
-                                  <span className="font-bold text-blue-500">115% da Selic</span>
+                                  <span className="font-bold text-blue-500">
+                                    {account.yieldRate}% do {account.yieldIndex || 'CDI'}
+                                  </span>
                               </div>
                           )}
 
@@ -258,10 +232,56 @@ const AccountsView: React.FC<AccountsViewProps> = ({
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveAccount}
-        initialData={editingAccount}
+        initialData={null}
         accountTypes={accountTypes}
         onUpdateAccountTypes={onUpdateAccountTypes}
       />
+
+       {/* --- DELETE CONFIRMATION MODAL --- */}
+       {accountToDelete && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-w-sm w-full p-6 relative animate-in zoom-in-95 duration-200">
+                    <button 
+                        onClick={() => setAccountToDelete(null)}
+                        className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-white"
+                    >
+                        <X size={20} />
+                    </button>
+
+                    <div className="flex flex-col items-center text-center mb-6">
+                        <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-4 text-red-600 dark:text-red-500">
+                            <Trash2 size={24} />
+                        </div>
+                        <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">Excluir Conta?</h3>
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                            Você está prestes a excluir permanentemente a conta <strong>{accountToDelete.name}</strong>.
+                        </p>
+                    </div>
+
+                    <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 p-3 rounded-lg flex gap-3 items-start mb-6 text-left">
+                        <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                            As transações antigas vinculadas a esta conta permanecerão no histórico, mas perderão a referência de origem.
+                        </p>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setAccountToDelete(null)}
+                            className="flex-1 py-3 rounded-xl font-bold text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={confirmDelete}
+                            className="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg shadow-red-900/20 transition-colors text-sm"
+                        >
+                            Sim, Excluir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
 
     </div>
   );

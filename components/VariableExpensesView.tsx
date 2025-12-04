@@ -1,7 +1,7 @@
 
 
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Pencil, Trash2, CreditCard as CardIcon, Wallet } from 'lucide-react';
+import { ArrowLeft, Plus, CreditCard as CardIcon, Wallet } from 'lucide-react';
 import { Expense, Account, CreditCard } from '../types';
 import NewExpenseModal from './NewExpenseModal';
 
@@ -25,7 +25,6 @@ const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({
   viewDate 
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // Filter expenses based on the viewDate's month and year
   const filteredExpenses = expenses.filter(exp => {
@@ -48,10 +47,6 @@ const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({
               id: e.id || Math.random().toString(36).substr(2, 9)
           }));
           updatedList = [...expenses, ...newItems];
-      } else if (expenseData.id) {
-          // Edit existing
-          newItems = [expenseData];
-          updatedList = expenses.map(e => e.id === expenseData.id ? expenseData : e);
       } else {
           // New single
           const newItem = { ...expenseData, id: Math.random().toString(36).substr(2, 9) };
@@ -64,32 +59,22 @@ const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({
           const newAccounts = [...accounts];
           let accountsChanged = false;
 
-          const processTransaction = (exp: any, revert: boolean) => {
+          const processTransaction = (exp: any) => {
               // Only affect wallet/bank accounts, not credit cards
               // Only affect if status is PAID
               if (exp.accountId && exp.status === 'paid') {
                   const accIdx = newAccounts.findIndex(a => a.id === exp.accountId);
                   if (accIdx > -1) {
-                      if (revert) {
-                          // Adding back money (reverting a payment)
-                          newAccounts[accIdx].currentBalance += exp.amount;
-                      } else {
-                          // Subtracting money (making a payment)
-                          newAccounts[accIdx].currentBalance -= exp.amount;
-                      }
+                      // Subtracting money (making a payment)
+                      newAccounts[accIdx].currentBalance -= exp.amount;
                       accountsChanged = true;
                   }
               }
           };
 
-          // 1. If Editing, Revert the OLD expense impact first
-          if (editingExpense) {
-              processTransaction(editingExpense, true);
-          }
-
-          // 2. Apply the NEW expense impact
+          // Apply the NEW expense impact
           newItems.forEach(item => {
-              processTransaction(item, false);
+              processTransaction(item);
           });
 
           if (accountsChanged) {
@@ -99,39 +84,9 @@ const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({
 
       onUpdateExpenses(updatedList);
       setIsModalOpen(false);
-      setEditingExpense(null);
-  };
-
-  const handleDelete = (id: string, e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      if(confirm('Deseja excluir esta despesa?')) {
-          
-          // --- BALANCE UPDATE LOGIC ---
-          // When deleting, we must "refund" the money to the account if it was paid
-          if (onUpdateAccounts) {
-            const expToDelete = expenses.find(exp => exp.id === id);
-            if (expToDelete && expToDelete.accountId && expToDelete.status === 'paid') {
-                const newAccounts = [...accounts];
-                const accIdx = newAccounts.findIndex(a => a.id === expToDelete.accountId);
-                if (accIdx > -1) {
-                    newAccounts[accIdx].currentBalance += expToDelete.amount;
-                    onUpdateAccounts(newAccounts);
-                }
-            }
-          }
-
-          const updatedList = expenses.filter(e => e.id !== id);
-          onUpdateExpenses(updatedList);
-      }
-  };
-
-  const handleEdit = (expense: Expense) => {
-      setEditingExpense(expense);
-      setIsModalOpen(true);
   };
 
   const handleNew = () => {
-      setEditingExpense(null);
       setIsModalOpen(true);
   };
 
@@ -189,7 +144,6 @@ const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({
                                 <th className="px-6 py-4 font-semibold">Categoria</th>
                                 <th className="px-6 py-4 font-semibold">Vencimento</th>
                                 <th className="px-6 py-4 font-semibold text-right">Valor</th>
-                                <th className="px-6 py-4 font-semibold text-center">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -228,27 +182,11 @@ const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({
                                         <td className="px-6 py-4 text-right font-bold text-red-600 dark:text-red-400">
                                             R$ {expense.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <button 
-                                                    onClick={() => handleEdit(expense)}
-                                                    className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-                                                >
-                                                    <Pencil size={16} />
-                                                </button>
-                                                <button 
-                                                    onClick={(e) => handleDelete(expense.id, e)}
-                                                    className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </td>
                                     </tr>
                                 )})
                             ) : (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-12 text-center text-zinc-500">
+                                    <td colSpan={7} className="px-6 py-12 text-center text-zinc-500">
                                         Nenhuma despesa encontrada para este mês.
                                     </td>
                                 </tr>
@@ -263,10 +201,12 @@ const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
             onSave={handleSaveExpense}
-            initialData={editingExpense}
+            initialData={null}
             accounts={accounts}
             creditCards={creditCards}
             categories={[]}
+            expenseType="variable"
+            themeColor="pink"
         />
     </div>
   );

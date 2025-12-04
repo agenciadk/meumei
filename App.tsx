@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -7,13 +6,14 @@ import Settings from './components/Settings';
 import AccountsView from './components/AccountsView';
 // VariableExpensesView replaced by generic ExpensesView
 import ExpensesView from './components/ExpensesView';
-import IncomesView from './components/IncomesView'; // New Import
+import IncomesView from './components/IncomesView';
+import YieldsView from './components/YieldsView'; // New Import
 import GlobalHeader from './components/GlobalHeader';
 import CompanyDetailsView from './components/CompanyDetailsView';
 import CompanySetup from './components/CompanySetup';
 import { ViewState, Role, CompanyInfo, Account, CreditCard, Expense, ExpenseType, Income } from './types';
 import { DEFAULT_COMPANY_INFO, DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_TYPES, DEFAULT_INCOME_CATEGORIES } from './constants';
-import { api } from './services/api'; // Importando o serviço de API criado
+import { api } from './services/api';
 
 const App: React.FC = () => {
   
@@ -65,7 +65,17 @@ const App: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>(() => {
     try {
         const saved = localStorage.getItem('meumei_accounts');
-        return saved ? JSON.parse(saved) : DEFAULT_ACCOUNTS;
+        // NOTE: For development/demo purposes, we want to ensure the NEW default accounts are loaded
+        // if the user has the old "default" accounts. In production, we wouldn't overwrite user data this easily.
+        // For now, if "MP - Nati" isn't present, we merge defaults.
+        const parsed = saved ? JSON.parse(saved) : DEFAULT_ACCOUNTS;
+        const hasNati = parsed.some((a: Account) => a.id === 'acc_mp_nati');
+        
+        if (!hasNati && !saved) {
+            return DEFAULT_ACCOUNTS;
+        }
+        // Return parsed saved data (or defaults if nothing saved)
+        return parsed.length > 0 ? parsed : DEFAULT_ACCOUNTS;
     } catch (e) {
         return DEFAULT_ACCOUNTS;
     }
@@ -267,65 +277,53 @@ const App: React.FC = () => {
   const handleUpdateIncomes = (updatedIncomes: Income[]) => setIncomes(updatedIncomes);
   const handleUpdateIncomeCategories = (updatedCategories: string[]) => setIncomeCategories(updatedCategories);
 
-  // --- GLOBAL DELETE HANDLERS ---
-  
-  const handleDeleteExpense = (id: string) => {
-      // Legacy implementation for expenses - preserved for now as focus is Incomes
-      const currentExpenses = [...expenses];
-      const currentAccounts = [...accounts];
+  // --- DELETE HANDLERS (Com Reversão de Saldo) ---
 
-      const expenseToDelete = currentExpenses.find(e => e.id === id);
+  const handleDeleteExpense = (id: string) => {
+      const expenseToDelete = expenses.find(e => e.id === id);
       if (!expenseToDelete) return;
 
-      if (expenseToDelete.accountId && expenseToDelete.status === 'paid' && expenseToDelete.paymentMethod !== 'Crédito') {
-          const accIndex = currentAccounts.findIndex(a => a.id === expenseToDelete.accountId);
+      // Se a despesa estava PAGA e foi debitada de uma CONTA (não cartão de crédito)
+      // Precisamos DEVOLVER o dinheiro para o saldo da conta
+      if (expenseToDelete.status === 'paid' && expenseToDelete.accountId) {
+          const accIndex = accounts.findIndex(a => a.id === expenseToDelete.accountId);
           if (accIndex > -1) {
-              const previousBalance = currentAccounts[accIndex].currentBalance;
-              currentAccounts[accIndex] = {
-                  ...currentAccounts[accIndex],
-                  currentBalance: previousBalance + expenseToDelete.amount
+              const updatedAccounts = [...accounts];
+              updatedAccounts[accIndex] = {
+                  ...updatedAccounts[accIndex],
+                  currentBalance: updatedAccounts[accIndex].currentBalance + expenseToDelete.amount
               };
+              setAccounts(updatedAccounts);
           }
       }
 
-      const updatedExpenses = currentExpenses.filter(e => e.id !== id);
-      setAccounts(currentAccounts);
-      setExpenses(updatedExpenses);
+      setExpenses(prev => prev.filter(e => e.id !== id));
   };
 
-  // --- REIMPLEMENTED DELETE INCOME LOGIC ---
-  const handleDeleteIncome = async (id: string | number) => {
-    try {
-      const idStr = String(id);
-      console.log('handleDeleteIncome chamado com id:', idStr);
-
-      const incomeToDelete = incomes.find(i => String(i.id) === idStr);
+  const handleDeleteIncome = (id: string) => {
+      const incomeToDelete = incomes.find(i => i.id === id);
       if (!incomeToDelete) return;
 
-      // Usando API service se disponível, como no fluxo
-      await api.deleteIncome(idStr);
-
-      setIncomes(prev =>
-        prev.filter(income => String(income.id) !== idStr)
-      );
-
-      if (incomeToDelete.accountId && incomeToDelete.status === 'received') {
-        setAccounts(prev => {
-          const updated = [...prev];
-          const accIdx = updated.findIndex(a => a.id === incomeToDelete.accountId);
-          if (accIdx > -1) {
-            updated[accIdx] = {
-              ...updated[accIdx],
-              currentBalance: updated[accIdx].currentBalance - incomeToDelete.amount,
-            };
+      // Se a entrada estava RECEBIDA, precisamos SUBTRAIR o dinheiro do saldo da conta
+      if (incomeToDelete.status === 'received' && incomeToDelete.accountId) {
+          const accIndex = accounts.findIndex(a => a.id === incomeToDelete.accountId);
+          if (accIndex > -1) {
+              const updatedAccounts = [...accounts];
+              updatedAccounts[accIndex] = {
+                  ...updatedAccounts[accIndex],
+                  currentBalance: updatedAccounts[accIndex].currentBalance - incomeToDelete.amount
+              };
+              setAccounts(updatedAccounts);
           }
-          return updated;
-        });
       }
-    } catch (e) {
-      console.error('Erro ao excluir income:', e);
-      alert('Erro ao excluir registro.');
-    }
+
+      setIncomes(prev => prev.filter(i => i.id !== id));
+  };
+
+  const handleDeleteAccount = (id: string) => {
+      // Ao deletar conta, apenas removemos a conta. 
+      // Transações antigas ficarão com referência a um ID inexistente, o que o sistema trata visualmente.
+      setAccounts(prev => prev.filter(a => a.id !== id));
   };
 
   const handleSystemReset = () => {
@@ -384,6 +382,7 @@ const App: React.FC = () => {
               onOpenFixedExpenses={() => setCurrentView(ViewState.FIXED_EXPENSES)}
               onOpenPersonalExpenses={() => setCurrentView(ViewState.PERSONAL_EXPENSES)}
               onOpenIncomes={() => setCurrentView(ViewState.INCOMES)}
+              onOpenYields={() => setCurrentView(ViewState.YIELDS)}
               financialData={{
                   balance: dashboardBalance,
                   income: totalIncome,
@@ -401,6 +400,7 @@ const App: React.FC = () => {
           <AccountsView 
              accounts={accounts}
              onUpdateAccounts={handleUpdateAccounts}
+             onDeleteAccount={handleDeleteAccount}
              accountTypes={accountTypes}
              onUpdateAccountTypes={handleUpdateAccountTypes}
              onBack={() => setCurrentView(ViewState.DASHBOARD)}
@@ -413,12 +413,23 @@ const App: React.FC = () => {
           <IncomesView 
              incomes={incomes}
              onUpdateIncomes={handleUpdateIncomes}
-             onDelete={handleDeleteIncome}
+             onDeleteIncome={handleDeleteIncome}
              accounts={accounts}
              onUpdateAccounts={handleUpdateAccounts}
              viewDate={viewDate}
              categories={incomeCategories}
              onUpdateCategories={handleUpdateIncomeCategories}
+             onBack={() => setCurrentView(ViewState.DASHBOARD)}
+          />
+      )}
+
+      {currentView === ViewState.YIELDS && renderLayout(
+          "Rendimentos",
+          "Acompanhe seus investimentos e aplicações",
+          <YieldsView 
+             accounts={accounts}
+             onUpdateAccounts={handleUpdateAccounts}
+             selicRate={companyInfo.selicRate}
              onBack={() => setCurrentView(ViewState.DASHBOARD)}
           />
       )}
@@ -434,7 +445,7 @@ const App: React.FC = () => {
              themeColor="pink"
              expenses={expenses}
              onUpdateExpenses={handleUpdateExpenses}
-             onDelete={handleDeleteExpense}
+             onDeleteExpense={handleDeleteExpense}
              accounts={accounts}
              onUpdateAccounts={handleUpdateAccounts}
              creditCards={creditCards}
@@ -454,7 +465,7 @@ const App: React.FC = () => {
              themeColor="amber"
              expenses={expenses}
              onUpdateExpenses={handleUpdateExpenses}
-             onDelete={handleDeleteExpense}
+             onDeleteExpense={handleDeleteExpense}
              accounts={accounts}
              onUpdateAccounts={handleUpdateAccounts}
              creditCards={creditCards}
@@ -474,7 +485,7 @@ const App: React.FC = () => {
              themeColor="cyan"
              expenses={expenses}
              onUpdateExpenses={handleUpdateExpenses}
-             onDelete={handleDeleteExpense}
+             onDeleteExpense={handleDeleteExpense}
              accounts={accounts}
              onUpdateAccounts={handleUpdateAccounts}
              creditCards={creditCards}
