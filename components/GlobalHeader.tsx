@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   Settings, 
@@ -7,6 +8,8 @@ import {
   Building2,
   ExternalLink
 } from 'lucide-react';
+import Logo from './Logo';
+import { Role } from '../types';
 
 interface GlobalHeaderProps {
   title?: string;
@@ -19,7 +22,7 @@ interface GlobalHeaderProps {
   onOpenSettings: () => void;
   onLogout: () => void;
   onCompanyClick: () => void;
-  role: 'admin' | 'user';
+  role: Role;
 }
 
 const GlobalHeader: React.FC<GlobalHeaderProps> = ({ 
@@ -36,6 +39,15 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
   
   const monthLabel = viewDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const capitalizedMonthLabel = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+
+  const getRoleLabel = (r: Role) => {
+    switch(r) {
+        case 'admin': return 'Administrador';
+        case 'financial': return 'Financeiro';
+        case 'limited': return 'Limitado';
+        default: return 'Colaborador';
+    }
+  };
 
   return (
     <div className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-pink-600 rounded-b-[40px] relative shadow-2xl shadow-indigo-500/20 mb-12 transition-all duration-300 z-50">
@@ -62,9 +74,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
 
                 {/* CENTER: Logo (meumei) */}
                 <div className="flex-1 w-full md:w-auto flex justify-center order-1 md:order-2 mb-4 md:mb-0">
-                    <h1 className="text-5xl font-extrabold tracking-tighter text-white drop-shadow-lg select-none">
-                        meumei
-                    </h1>
+                    <Logo size="5xl" className="text-white drop-shadow-lg" />
                 </div>
 
                 {/* RIGHT: User Info & Actions */}
@@ -75,7 +85,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                         <div className="hidden md:block">
                             <p className="text-sm font-bold text-white leading-none">{username}</p>
                             <p className="text-[10px] text-indigo-200 font-medium uppercase tracking-wider mt-0.5">
-                                {role === 'admin' ? 'Administrador' : 'Colaborador'}
+                                {getRoleLabel(role)}
                             </p>
                         </div>
                         <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center font-bold text-white shadow-inner border border-white/10">

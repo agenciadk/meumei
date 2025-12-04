@@ -1,5 +1,5 @@
 
-
+// ... existing imports ...
 import React, { useState } from 'react';
 import { ArrowLeft, Plus, CreditCard as CardIcon, Wallet } from 'lucide-react';
 import { Expense, Account, CreditCard } from '../types';
@@ -13,6 +13,8 @@ interface VariableExpensesViewProps {
   onUpdateAccounts?: (accounts: Account[]) => void; // Added to handle balance updates
   creditCards: CreditCard[];
   viewDate: Date;
+  categories: string[];
+  onUpdateCategories: (categories: string[]) => void;
 }
 
 const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({ 
@@ -22,13 +24,15 @@ const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({
   accounts,
   onUpdateAccounts,
   creditCards,
-  viewDate 
+  viewDate,
+  categories,
+  onUpdateCategories
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Filter expenses based on the viewDate's month and year
   const filteredExpenses = expenses.filter(exp => {
-      const targetDate = new Date(exp.dueDate); 
+      const targetDate = new Date(exp.dueDate + 'T12:00:00'); 
       return targetDate.getMonth() === viewDate.getMonth() && targetDate.getFullYear() === viewDate.getFullYear();
   });
 
@@ -162,7 +166,7 @@ const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-zinc-600 dark:text-zinc-300">
-                                            {new Date(expense.date).toLocaleDateString('pt-BR')}
+                                            {new Date(expense.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                                         </td>
                                         <td className="px-6 py-4 font-medium text-zinc-900 dark:text-white">
                                             {expense.description}
@@ -177,7 +181,7 @@ const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({
                                             {expense.category}
                                         </td>
                                         <td className="px-6 py-4 text-zinc-600 dark:text-zinc-300">
-                                            {new Date(expense.dueDate).toLocaleDateString('pt-BR')}
+                                            {new Date(expense.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                                         </td>
                                         <td className="px-6 py-4 text-right font-bold text-red-600 dark:text-red-400">
                                             R$ {expense.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -204,7 +208,8 @@ const VariableExpensesView: React.FC<VariableExpensesViewProps> = ({
             initialData={null}
             accounts={accounts}
             creditCards={creditCards}
-            categories={[]}
+            categories={categories}
+            onUpdateCategories={onUpdateCategories}
             expenseType="variable"
             themeColor="pink"
         />

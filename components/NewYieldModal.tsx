@@ -31,7 +31,12 @@ const NewYieldModal: React.FC<NewYieldModalProps> = ({
     if (isOpen) {
         setAccountId(investmentAccounts.length > 0 ? investmentAccounts[0].id : '');
         setAmount('');
-        const today = new Date().toISOString().split('T')[0];
+        
+        // Adjust for local timezone to prevent date shifting
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        const today = now.toISOString().split('T')[0];
+
         setDate(today);
         setNotes('');
     }

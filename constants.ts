@@ -1,9 +1,6 @@
 
-// Credentials as requested
-export const MOCK_CREDENTIALS = {
-  username: 'agdk',
-  password: 'Pipoca@123'
-};
+// Credentials
+export const MASTER_LICENSE_KEY = 'T7aV-qP2r-9ZgH';
 
 export const APP_NAME = 'meumei';
 
@@ -24,59 +21,19 @@ export const COMPANY_DATA = {
 
 export const DEFAULT_COMPANY_INFO = {
   name: 'Minha Empresa',
-  cnpj: 'XX.XXX.XXX/0001-XX',
+  cnpj: '',
   startDate: COMPANY_DATA.monthStartISO,
   address: '',
+  zipCode: '',
   phone: '',
   email: '',
   website: '',
-  selicRate: 11.25, // Atualizado para 11.25% conforme solicitado
-  isConfigured: false // Default to false until setup is completed
+  selicRate: 11.25,
+  isConfigured: true // Default true as setup is now in Settings
 };
 
-// --- CONTAS PADRÃO COM DADOS DE INVESTIMENTO (ATUALIZADO) ---
-export const DEFAULT_ACCOUNTS: any[] = [
-    { 
-        id: 'acc_mp_nati', 
-        name: 'MP - Nati', 
-        type: 'Rendimentos', 
-        initialBalance: 3868.19, // Ajustado para base antes do rendimento
-        currentBalance: 3868.19, 
-        yieldRate: 120, 
-        yieldIndex: 'CDI',
-        balanceHistory: [{ date: '2025-12-01', value: 3868.19 }]
-    },
-    { 
-        id: 'acc_mp_ale', 
-        name: 'MP - Ale', 
-        type: 'Rendimentos', 
-        initialBalance: 5912.57, 
-        currentBalance: 5912.57, 
-        yieldRate: 120, 
-        yieldIndex: 'CDI',
-        balanceHistory: [{ date: '2025-12-01', value: 5912.57 }]
-    },
-    { 
-        id: 'acc_mp_dk', 
-        name: 'MP - DK', 
-        type: 'Rendimentos', 
-        initialBalance: 1727.32, 
-        currentBalance: 1727.32, 
-        yieldRate: 115, 
-        yieldIndex: 'CDI',
-        balanceHistory: [{ date: '2025-12-01', value: 1727.32 }] 
-    },
-    { 
-        id: 'acc_nubank', 
-        name: 'Nubank', 
-        type: 'Conta Bancária', 
-        initialBalance: 2500, 
-        currentBalance: 2150.50 
-    }
-];
-
-// Dados antigos mantidos apenas para referência (não usados na inicialização)
-export const MOCK_ACCOUNTS_FOR_DEMO = [];
+// --- CONTAS PADRÃO (LISTA VAZIA PARA PRIMEIRO ACESSO) ---
+export const DEFAULT_ACCOUNTS: any[] = [];
 
 export const DEFAULT_ACCOUNT_TYPES = [
     'Conta Bancária',

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Edit2, Plus, CreditCard, Home, ShoppingCart, User } from 'lucide-react';
+import { X, Calendar, Edit2, Plus, CreditCard, Home, ShoppingCart, User, Barcode, Briefcase, Trash2 } from 'lucide-react';
 import { Expense, Account, CreditCard as CreditCardType, ExpenseType } from '../types';
 
 interface NewExpenseModalProps {
@@ -11,27 +11,28 @@ interface NewExpenseModalProps {
   accounts: Account[];
   creditCards: CreditCardType[];
   categories: string[]; 
-  expenseType: ExpenseType; // Prop para identificar o tipo e ajustar o layout
-  themeColor?: 'indigo' | 'amber' | 'cyan' | 'pink'; // Prop para cor do tema
+  onUpdateCategories: (categories: string[]) => void;
+  expenseType: ExpenseType; 
+  themeColor?: 'indigo' | 'amber' | 'cyan' | 'pink';
+  defaultDate?: Date; // New prop
 }
-
-const DEFAULT_CATEGORIES = [
-    'Alimentação', 'Assinatura', 'Cenário', 'Equipamentos', 'Logística', 'Materiais', 'Plantas', 'Revelação', 'Tráfego Pago', 'Moradia', 'Transporte', 'Saúde', 'Lazer'
-];
 
 const NewExpenseModal: React.FC<NewExpenseModalProps> = ({ 
   isOpen, 
   onClose, 
   onSave, 
   initialData, 
-  accounts,
+  accounts, 
   creditCards,
+  categories,
+  onUpdateCategories,
   expenseType,
-  themeColor = 'indigo'
+  themeColor = 'indigo',
+  defaultDate
 }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState(DEFAULT_CATEGORIES[0]);
+  const [category, setCategory] = useState('');
   const [date, setDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Débito');
@@ -39,7 +40,12 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
   const [selectedCardId, setSelectedCardId] = useState('');
   const [status, setStatus] = useState<'pending' | 'paid'>('pending');
   const [notes, setNotes] = useState('');
+  const [taxStatus, setTaxStatus] = useState<'PJ' | 'PF'>('PJ');
   
+  // Category Management State
+  const [isManagingCategories, setIsManagingCategories] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
   // Installments State
   const [isInstallment, setIsInstallment] = useState(false);
   const [installmentCount, setInstallmentCount] = useState(2);
@@ -81,6 +87,11 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+        // Set default category if none selected
+        if (!category && categories.length > 0) {
+            setCategory(categories[0]);
+        }
+
         if (initialData) {
             setDescription(initialData.description);
             setAmount(initialData.amount.toString());
@@ -92,28 +103,54 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
             setSelectedCardId(initialData.cardId || '');
             setStatus(initialData.status);
             setNotes(initialData.notes || '');
+            setTaxStatus(initialData.taxStatus || 'PJ');
             setIsInstallment(false);
         } else {
             // Reset form
             setDescription('');
             setAmount('');
-            setCategory(DEFAULT_CATEGORIES[0]);
-            const today = new Date().toISOString().split('T')[0];
-            setDate(today);
-            setDueDate(today);
+            setCategory(categories.length > 0 ? categories[0] : '');
+            
+            // Logic to set default date:
+            // If defaultDate (viewDate) is provided, and is DIFFERENT month/year than real today, use it.
+            // Otherwise use real today.
+            const now = new Date();
+            let initialDateStr = now.toISOString().split('T')[0];
+
+            if (defaultDate) {
+                const isSameMonth = defaultDate.getMonth() === now.getMonth() && defaultDate.getFullYear() === now.getFullYear();
+                if (!isSameMonth) {
+                    // Use the 1st of the view month (or whatever defaultDate is)
+                    // We need to ensure timezone doesn't shift it back
+                    const d = new Date(defaultDate);
+                    // Add a few hours to ensure we stay in the day/month
+                    d.setHours(12);
+                    initialDateStr = d.toISOString().split('T')[0];
+                }
+            }
+
+            setDate(initialDateStr);
+            setDueDate(initialDateStr);
             setPaymentMethod('Débito');
+            // Automatic status for Debit is 'paid'
+            setStatus('paid');
             setSelectedAccountId(accounts.length > 0 ? accounts[0].id : '');
             setSelectedCardId(creditCards.length > 0 ? creditCards[0].id : '');
-            setStatus('pending');
             setNotes('');
+            // Se for despesa pessoal, padrão é PF, senão PJ
+            setTaxStatus(expenseType === 'personal' ? 'PF' : 'PJ');
             setIsInstallment(false);
             setInstallmentCount(2);
             setInstallmentValueType('parcel');
         }
+    } else {
+        setIsManagingCategories(false);
+        setNewCategoryName('');
     }
-  }, [isOpen, initialData, accounts, creditCards]);
+  }, [isOpen, initialData, accounts, creditCards, expenseType, categories, defaultDate]);
 
-  // --- Auto-Calculate Due Date for Credit Cards ---
+  // ... (rest of the component logic remains unchanged) ...
+  // --- Auto-Calculate Due Date for Credit Cards (FIXED LOGIC) ---
   useEffect(() => {
       if (paymentMethod === 'Crédito' && selectedCardId && date) {
           const card = creditCards.find(c => c.id === selectedCardId);
@@ -123,16 +160,34 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
               const dueDay = card.dueDay;
               
               const launchDay = launchDate.getDate();
+              
+              // Começa com o mês da compra
               let targetMonth = new Date(launchDate);
 
+              // 1. Verificar Ciclo de Fechamento
+              // Se comprou no dia do fechamento ou depois, entra na fatura do mês seguinte
               if (launchDay >= closingDay) {
                   targetMonth.setMonth(targetMonth.getMonth() + 1);
               }
 
-              targetMonth.setMonth(targetMonth.getMonth() + 1);
+              // 2. Verificar Calendário de Vencimento
+              // Se o dia do vencimento é MENOR que o dia do fechamento (ex: Fecha 25, Vence 05),
+              // então o vencimento ocorre no mês SEGUINTE ao mês da fatura.
+              if (dueDay < closingDay) {
+                  targetMonth.setMonth(targetMonth.getMonth() + 1);
+              }
+
+              // Define o dia do vencimento correto
               targetMonth.setDate(dueDay);
               
-              setDueDate(targetMonth.toISOString().split('T')[0]);
+              // Format Manually to avoid UTC shifts
+              const y = targetMonth.getFullYear();
+              const m = String(targetMonth.getMonth() + 1).padStart(2, '0');
+              const d = String(targetMonth.getDate()).padStart(2, '0');
+              
+              setDueDate(`${y}-${m}-${d}`);
+              
+              // Credit always pending
               setStatus('pending'); 
           }
       }
@@ -153,10 +208,51 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
       }
   }, [isInstallment, installmentCount, dueDate]);
 
+  // --- Handle Payment Method Change with Auto-Status Logic ---
+  const handlePaymentMethodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const newMethod = e.target.value;
+      setPaymentMethod(newMethod);
+
+      // AUTOMATIC STATUS LOGIC
+      if (newMethod === 'Crédito' || newMethod === 'Boleto') {
+          setStatus('pending');
+      } else {
+          setStatus('paid');
+      }
+  };
+
+  const handleAddCategory = () => {
+    if (newCategoryName.trim()) {
+        const trimmed = newCategoryName.trim();
+        if (!categories.includes(trimmed)) {
+            const newCats = [...categories, trimmed];
+            onUpdateCategories(newCats);
+            setCategory(trimmed);
+            setNewCategoryName('');
+        }
+    }
+  };
+
+  const handleDeleteCategory = (catToDelete: string) => {
+    if (categories.length <= 1) {
+        alert("É necessário ter pelo menos uma categoria.");
+        return;
+    }
+    const newCats = categories.filter(c => c !== catToDelete);
+    onUpdateCategories(newCats);
+    if (category === catToDelete) {
+        setCategory(newCats[0]);
+    }
+  };
 
   if (!isOpen) return null;
 
   const isCredit = paymentMethod === 'Crédito';
+  // DEFINIÇÃO CHAVE: Parcelamento disponível para Crédito E Boleto
+  const supportsInstallments = isCredit || paymentMethod === 'Boleto';
+  
+  // Logic to lock status (e.g. Credit Card is always pending initially, installments are pending)
+  const isStatusDisabled = isCredit || (isInstallment && paymentMethod === 'Boleto');
 
   // --- Installment Logic ---
   const numericAmount = parseFloat(amount.replace(',', '.')) || 0;
@@ -186,14 +282,17 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
           cardId: isCredit ? selectedCardId : undefined,
           status,
           notes,
+          taxStatus // Salvar natureza fiscal
       };
 
-      if (isCredit && isInstallment && !initialData) {
+      // LOGIC: Check supportsInstallments instead of just isCredit
+      if (supportsInstallments && isInstallment && !initialData) {
           // GENERATE MULTIPLE EXPENSES
           const groupId = Math.random().toString(36).substr(2, 9);
           const expensesToSave = [];
           
           for (let i = 0; i < installmentCount; i++) {
+              // Calculate Due Date based on the Initial Due Date (manual or calculated)
               const baseDue = new Date(dueDate + 'T12:00:00');
               baseDue.setMonth(baseDue.getMonth() + i);
               const specificDueDate = baseDue.toISOString().split('T')[0];
@@ -207,7 +306,9 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                   installmentNumber: i + 1,
                   totalInstallments: installmentCount,
                   installmentGroupId: groupId,
-                  description: `${description} (${i+1}/${installmentCount})`
+                  description: `${description} (${i+1}/${installmentCount})`,
+                  // Force Pending for future installments
+                  status: 'pending' 
               });
           }
           onSave(expensesToSave); 
@@ -215,7 +316,7 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
           onSave({
               ...baseExpense,
               amount: parseFloat(amount.replace(',', '.')),
-              dueDate: isCredit ? dueDate : date, 
+              dueDate: (isCredit || paymentMethod === 'Boleto') ? dueDate : date, 
           });
       }
       onClose();
@@ -263,30 +364,89 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                         className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all`}
                     />
                 </div>
-                <div className="space-y-2">
-                    <div className="flex justify-between">
+                
+                {/* CATEGORIA - Com Gerenciamento Dinâmico */}
+                <div className="space-y-2 relative">
+                    <div className="flex justify-between items-center h-4 mb-2">
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">Categoria</label>
+                        <button 
+                            type="button"
+                            onClick={() => setIsManagingCategories(!isManagingCategories)}
+                            className={`text-[10px] font-bold flex items-center gap-1 hover:underline transition-colors ${config.colorClass.split(' ')[0]}`}
+                        >
+                            {isManagingCategories ? 'Fechar Edição' : <><Edit2 size={10} /> Editar / <Plus size={10} /> Nova</>}
+                        </button>
                     </div>
-                    <select 
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all appearance-none`}
-                    >
-                        {DEFAULT_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
+                    
+                    {isManagingCategories ? (
+                        <div className="absolute top-8 left-0 right-0 z-[60] bg-zinc-50 dark:bg-[#202020] border border-zinc-200 dark:border-zinc-700 rounded-xl p-3 shadow-lg">
+                            <div className="flex gap-2 mb-3">
+                                <input 
+                                    autoFocus
+                                    type="text" 
+                                    placeholder="Nova categoria..."
+                                    value={newCategoryName}
+                                    onChange={(e) => setNewCategoryName(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                                    className="flex-1 bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                                <button 
+                                    onClick={handleAddCategory}
+                                    className={`text-white px-3 py-2 rounded-md ${config.btnClass}`}
+                                >
+                                    <Plus size={16} />
+                                </button>
+                            </div>
+                            <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-1">
+                                {categories.map(cat => (
+                                    <div key={cat} className="flex justify-between items-center px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded">
+                                        <span className="text-sm text-zinc-700 dark:text-zinc-300">{cat}</span>
+                                        <button onClick={() => handleDeleteCategory(cat)} className="text-red-500 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded">
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <select 
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                            className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all appearance-none`}
+                        >
+                            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                    )}
                 </div>
             </div>
 
-            <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">Data de lançamento</label>
-                <div className="relative">
-                    <input 
-                        type="date" 
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                        className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all [color-scheme:dark]`}
-                    />
-                    <Calendar className="absolute right-4 top-3 text-zinc-400 pointer-events-none" size={20} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* NATUREZA FISCAL */}
+                <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide flex items-center gap-1">
+                        <Briefcase size={12} /> Natureza Fiscal
+                    </label>
+                    <select 
+                        value={taxStatus}
+                        onChange={(e) => setTaxStatus(e.target.value as 'PJ' | 'PF')}
+                        className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all appearance-none`}
+                    >
+                        <option value="PJ">PJ (Empresarial/MEI)</option>
+                        <option value="PF">PF (Pessoal)</option>
+                    </select>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">Data de lançamento</label>
+                    <div className="relative">
+                        <input 
+                            type="date" 
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all [color-scheme:dark]`}
+                        />
+                        <Calendar className="absolute right-4 top-3 text-zinc-400 pointer-events-none" size={20} />
+                    </div>
                 </div>
             </div>
 
@@ -314,7 +474,7 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                     <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">Forma de Pagamento</label>
                     <select 
                         value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        onChange={handlePaymentMethodChange}
                         className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all appearance-none`}
                     >
                         <option>Débito</option>
@@ -330,15 +490,41 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">Status</label>
-                    <select 
-                        value={status}
-                        onChange={(e) => setStatus(e.target.value as 'pending' | 'paid')}
-                        disabled={isCredit} 
-                        className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all appearance-none disabled:opacity-50`}
-                    >
-                        <option value="pending">Pendente</option>
-                        <option value="paid">Pago</option>
-                    </select>
+                    <div className={`flex gap-2 ${isStatusDisabled ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {/* Opção PAGO */}
+                        <label className={`flex-1 flex items-center justify-center gap-2 cursor-pointer p-3 rounded-lg border transition-colors ${status === 'paid' ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 dark:border-emerald-500/50' : 'border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
+                            <input 
+                                type="radio" 
+                                name="status" 
+                                value="paid" 
+                                checked={status === 'paid'}
+                                onChange={() => setStatus('paid')}
+                                disabled={isStatusDisabled}
+                                className="hidden"
+                            />
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${status === 'paid' ? 'border-emerald-500' : 'border-zinc-400'}`}>
+                                {status === 'paid' && <div className="w-2 h-2 rounded-full bg-emerald-500"></div>}
+                            </div>
+                            <span className={`text-sm font-medium ${status === 'paid' ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-500'}`}>Pago</span>
+                        </label>
+
+                        {/* Opção PENDENTE */}
+                        <label className={`flex-1 flex items-center justify-center gap-2 cursor-pointer p-3 rounded-lg border transition-colors ${status === 'pending' ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-500 dark:border-amber-500/50' : 'border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
+                            <input 
+                                type="radio" 
+                                name="status" 
+                                value="pending" 
+                                checked={status === 'pending'}
+                                onChange={() => setStatus('pending')}
+                                disabled={isStatusDisabled}
+                                className="hidden"
+                            />
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${status === 'pending' ? 'border-amber-500' : 'border-zinc-400'}`}>
+                                {status === 'pending' && <div className="w-2 h-2 rounded-full bg-amber-500"></div>}
+                            </div>
+                            <span className={`text-sm font-medium ${status === 'pending' ? 'text-amber-700 dark:text-amber-400' : 'text-zinc-500'}`}>Pendente</span>
+                        </label>
+                    </div>
                 </div>
                 
                 <div className="space-y-2">
@@ -348,6 +534,7 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                             type="date" 
                             value={dueDate}
                             onChange={(e) => setDueDate(e.target.value)}
+                            // Disabled ONLY for Credit (calculated automatically)
                             disabled={isCredit} 
                             className={`w-full bg-gray-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${config.colorClass} transition-all [color-scheme:dark] disabled:opacity-50`}
                         />
@@ -356,17 +543,21 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                 </div>
             </div>
 
-            {isCredit && (
-                <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl p-4 space-y-4">
+            {/* SEÇÃO DE PARCELAMENTO - Agora visível para Crédito OU Boleto */}
+            {supportsInstallments && (
+                <div className={`${isCredit ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-100' : 'bg-gray-100 dark:bg-zinc-800 border-zinc-200'} border rounded-xl p-4 space-y-4`}>
                     <div className="flex items-center gap-2">
                         <input 
                             type="checkbox" 
                             id="installments" 
                             checked={isInstallment} 
                             onChange={(e) => setIsInstallment(e.target.checked)}
-                            className="w-4 h-4 rounded border-zinc-600 bg-transparent text-blue-600 focus:ring-blue-500"
+                            className={`w-4 h-4 rounded border-zinc-600 bg-transparent focus:ring-2 ${isCredit ? 'text-blue-600 focus:ring-blue-500' : 'text-zinc-600 focus:ring-zinc-500'}`}
                         />
-                        <label htmlFor="installments" className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Compra parcelada?</label>
+                        <label htmlFor="installments" className="text-sm font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
+                            {isCredit ? 'Compra parcelada?' : 'Boleto Parcelado?'}
+                            {paymentMethod === 'Boleto' && <Barcode size={16} />}
+                        </label>
                     </div>
 
                     {isInstallment && (
@@ -420,7 +611,7 @@ const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
                                     Valor total: R$ {finalTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
                                 </p>
                                 {firstInstallmentDate && lastInstallmentDate && (
-                                    <div className="flex justify-between text-xs text-blue-500 font-medium bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                                    <div className={`flex justify-between text-xs font-medium p-2 rounded ${isCredit ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-500' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'}`}>
                                         <span>1ª: {firstInstallmentDate}</span>
                                         <span>...</span>
                                         <span>{installmentCount}ª: {lastInstallmentDate}</span>
